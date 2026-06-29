@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Wifi, WifiOff, Scan, Plus, User, Clock } from "lucide-react";
+import { Wifi, WifiOff, Scan, Edit2, User, Clock } from "lucide-react";
 
 interface Device {
   id: string; // MAC address
@@ -16,9 +16,8 @@ export default function Home() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Registration modal state
-  const [showRegister, setShowRegister] = useState(false);
-  const [newMac, setNewMac] = useState("");
+  // Renaming modal state
+  const [editingDevice, setEditingDevice] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
 
   useEffect(() => {
@@ -28,8 +27,16 @@ export default function Home() {
       snapshot.forEach((doc) => {
         devs.push({ id: doc.id, ...doc.data() } as Device);
       });
-      // Sort by online status
-      devs.sort((a, b) => (a.is_online === b.is_online ? 0 : a.is_online ? -1 : 1));
+      // Sort by online status first, then by name (Unknown at the bottom)
+      devs.sort((a, b) => {
+        const nameA = a.name || "Unknown";
+        const nameB = b.name || "Unknown";
+        
+        if (a.is_online !== b.is_online) return a.is_online ? -1 : 1;
+        if (nameA === "Unknown" && nameB !== "Unknown") return 1;
+        if (nameA !== "Unknown" && nameB === "Unknown") return -1;
+        return nameA.localeCompare(nameB);
+      });
       setDevices(devs);
       setLoading(false);
     });
@@ -40,29 +47,32 @@ export default function Home() {
   const requestScan = async () => {
     try {
       await setDoc(doc(db, "requests", "scan"), { trigger: true }, { merge: true });
-      alert("Scan requested! Please wait a moment.");
+      alert("Scan requested! Unknown devices will appear shortly.");
     } catch (e) {
       console.error(e);
       alert("Error requesting scan. Check configuration.");
     }
   };
 
-  const registerDevice = async (e: React.FormEvent) => {
+  const updateDeviceName = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMac || !newName) return;
+    if (!editingDevice || !newName) return;
     try {
-      await setDoc(doc(db, "devices", newMac.toLowerCase().trim()), {
+      await updateDoc(doc(db, "devices", editingDevice), {
         name: newName.trim(),
-        is_online: false,
-        last_seen: new Date(),
       });
-      setShowRegister(false);
-      setNewMac("");
+      setEditingDevice(null);
       setNewName("");
     } catch (e) {
       console.error(e);
-      alert("Error registering device");
+      alert("Error updating device name");
     }
+  };
+
+  const openEditModal = (device: Device) => {
+    setEditingDevice(device.id);
+    const name = device.name || "Unknown";
+    setNewName(name === "Unknown" ? "" : name);
   };
 
   if (loading) {
@@ -100,7 +110,7 @@ export default function Home() {
         <div className="space-y-4">
           {devices.length === 0 ? (
             <div className="p-8 text-center bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md">
-              <p className="text-slate-400 text-sm">No devices registered yet.</p>
+              <p className="text-slate-400 text-sm">No devices found. Press Scan to search.</p>
             </div>
           ) : (
             devices.map((device) => (
@@ -121,22 +131,27 @@ export default function Home() {
                     <div
                       className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner ${
                         device.is_online
-                          ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
+                          ? device.name === "Unknown"
+                            ? "bg-slate-700 text-slate-300"
+                            : "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
                           : "bg-slate-800 text-slate-400 border border-slate-700"
                       }`}
                     >
                       <User className="w-6 h-6" />
                     </div>
                     <div>
-                      <h2 className="font-semibold text-lg">{device.name}</h2>
+                      <h2 className={`font-semibold text-lg ${(!device.name || device.name === "Unknown") ? "text-slate-400 italic" : ""}`}>
+                        {device.name || "Unknown"}
+                      </h2>
                       <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
                         <Clock className="w-3 h-3" />
                         {device.is_online ? "Active Now" : "Away"}
+                        <span className="opacity-50 ml-1">({device.id})</span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center">
+                  <div className="flex flex-col items-end gap-2">
                     {device.is_online ? (
                       <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full text-emerald-400 text-xs font-medium">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -148,6 +163,12 @@ export default function Home() {
                         Away
                       </div>
                     )}
+                    <button
+                      onClick={() => openEditModal(device)}
+                      className="text-slate-400 hover:text-white transition-colors p-1"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -155,13 +176,13 @@ export default function Home() {
           )}
         </div>
 
-        {showRegister && (
+        {editingDevice && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-sm bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl scale-in-center">
-              <h3 className="text-xl font-bold mb-4">Register Device</h3>
-              <form onSubmit={registerDevice} className="space-y-4">
+              <h3 className="text-xl font-bold mb-4">Rename Device</h3>
+              <form onSubmit={updateDeviceName} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Owner Name</label>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">New Name</label>
                   <input
                     type="text"
                     required
@@ -171,21 +192,10 @@ export default function Home() {
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">MAC Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={newMac}
-                    onChange={(e) => setNewMac(e.target.value)}
-                    placeholder="e.g. 00:11:22:33:44:55"
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
-                  />
-                </div>
                 <div className="flex gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowRegister(false)}
+                    onClick={() => setEditingDevice(null)}
                     className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm font-medium transition-colors"
                   >
                     Cancel
@@ -194,20 +204,13 @@ export default function Home() {
                     type="submit"
                     className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-indigo-600/20"
                   >
-                    Register
+                    Save Name
                   </button>
                 </div>
               </form>
             </div>
           </div>
         )}
-
-        <button
-          onClick={() => setShowRegister(true)}
-          className="fixed bottom-8 right-6 w-14 h-14 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full flex items-center justify-center text-white shadow-[0_8px_30px_rgba(79,70,229,0.4)] hover:scale-105 active:scale-95 transition-all z-40"
-        >
-          <Plus className="w-6 h-6" />
-        </button>
       </div>
     </main>
   );
