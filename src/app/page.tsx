@@ -125,6 +125,13 @@ export default function Home() {
     "父": [], "母": [], "ちさこ": [], "とし": [], "TV": [], "PC": [], "未登録": []
   };
 
+  // Pre-calculate stable numbers for Unknown devices
+  const unknownDevices = [...devices].filter(d => !d.name || d.name === "Unknown").sort((a, b) => a.id.localeCompare(b.id));
+  const getUnknownName = (deviceId: string) => {
+    const index = unknownDevices.findIndex(d => d.id === deviceId);
+    return `デバイス ${index + 1}`;
+  };
+
   devices.forEach(d => {
     const owner = d.owner || "未登録";
     if (groupedDevices[owner]) {
@@ -167,15 +174,12 @@ export default function Home() {
                     </div>
                     <div>
                       <h3 className={`font-bold text-slate-700 ${(!device.name || device.name === "Unknown") ? "italic text-slate-400" : ""}`}>
-                        {device.name || "Unknown"}
+                        {(!device.name || device.name === "Unknown") ? getUnknownName(device.id) : device.name}
                       </h3>
                       <div className="flex flex-col gap-0.5 mt-1">
                         <div className="flex items-center gap-1.5 text-xs text-slate-500">
                           <Clock className="w-3 h-3" />
                           {device.is_online ? "おうちにいます" : "おでかけ中"}
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          MAC: {device.id} {device.ip ? `| IP: ${device.ip}` : ""}
                         </div>
                       </div>
                     </div>
