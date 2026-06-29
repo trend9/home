@@ -35,6 +35,10 @@ export default function Home() {
   const [newName, setNewName] = useState("");
   const [newOwner, setNewOwner] = useState("");
   const [newColor, setNewColor] = useState("pink");
+  
+  // Dashboard state
+  const [lastScan, setLastScan] = useState<Date | null>(null);
+  const [countdown, setCountdown] = useState<string>("");
 
   useEffect(() => {
     // Listen to devices
@@ -54,8 +58,38 @@ export default function Home() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    // Listen to system status
+    const unsubStatus = onSnapshot(doc(db, "system", "status"), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.last_scan) {
+          setLastScan(data.last_scan.toDate());
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      unsubStatus();
+    };
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!lastScan) return;
+      const nextScanTime = new Date(lastScan.getTime() + 15 * 60 * 1000);
+      const diff = nextScanTime.getTime() - new Date().getTime();
+      
+      if (diff <= 0) {
+        setCountdown("スキャン中...");
+      } else {
+        const m = Math.floor(diff / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setCountdown(`あと ${m}分 ${s}秒`);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lastScan]);
 
   const requestScan = async () => {
     try {
@@ -191,28 +225,47 @@ export default function Home() {
     );
   };
 
+  const onlineCount = devices.filter(d => d.is_online).length;
+
   return (
     <main className="min-h-screen bg-[#FFF5F7] text-slate-800 p-6 pb-24 font-sans selection:bg-pink-200">
       <div className="max-w-md mx-auto">
-        <header className="flex items-center justify-between mb-8 mt-4 bg-white p-4 rounded-3xl shadow-sm border border-pink-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500">
-              <Heart className="w-5 h-5 fill-current" />
+        <header className="flex flex-col gap-4 mb-8 mt-4 bg-white p-4 rounded-3xl shadow-sm border border-pink-100">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500">
+                <Heart className="w-5 h-5 fill-current" />
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-slate-700 tracking-tight">
+                  Kazoku Radar
+                </h1>
+                <p className="text-[10px] font-bold text-pink-400">HOME WI-FI TRACKER</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-700 tracking-tight">
-                Kazoku Radar
-              </h1>
-              <p className="text-[10px] font-bold text-pink-400">HOME WI-FI TRACKER</p>
+            <button
+              onClick={requestScan}
+              className="flex items-center gap-2 px-4 py-2 bg-pink-400 hover:bg-pink-500 rounded-2xl transition-all active:scale-95 text-white text-sm font-bold shadow-md shadow-pink-200"
+            >
+              <Scan className="w-4 h-4" />
+              さがす
+            </button>
+          </div>
+          
+          <div className="flex flex-col gap-2 pt-3 border-t border-pink-50">
+            <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+              <span className="flex items-center gap-1"><Wifi className="w-3 h-3 text-emerald-500"/> 現在つながっているデバイス:</span>
+              <span className="text-pink-500 text-sm">{onlineCount} 台</span>
+            </div>
+            <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> 最新の自動スキャン:</span>
+              <span>{lastScan ? lastScan.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "取得中..."}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+              <span className="flex items-center gap-1"><Scan className="w-3 h-3"/> 次のスキャンまで:</span>
+              <span className="text-pink-400 bg-pink-50 px-2 py-0.5 rounded-md">{countdown || "計算中..."}</span>
             </div>
           </div>
-          <button
-            onClick={requestScan}
-            className="flex items-center gap-2 px-4 py-2 bg-pink-400 hover:bg-pink-500 rounded-2xl transition-all active:scale-95 text-white text-sm font-bold shadow-md shadow-pink-200"
-          >
-            <Scan className="w-4 h-4" />
-            さがす
-          </button>
         </header>
 
         <div className="space-y-2">
