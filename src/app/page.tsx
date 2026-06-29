@@ -38,7 +38,6 @@ export default function Home() {
   
   // Dashboard state
   const [lastScan, setLastScan] = useState<Date | null>(null);
-  const [countdown, setCountdown] = useState<string>("");
 
   useEffect(() => {
     // Listen to devices
@@ -74,22 +73,7 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (!lastScan) return;
-      const nextScanTime = new Date(lastScan.getTime() + 15 * 60 * 1000);
-      const diff = nextScanTime.getTime() - new Date().getTime();
-      
-      if (diff <= 0) {
-        setCountdown("スキャン中...");
-      } else {
-        const m = Math.floor(diff / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        setCountdown(`あと ${m}分 ${s}秒`);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [lastScan]);
+
 
   const requestScan = async () => {
     try {
@@ -258,12 +242,8 @@ export default function Home() {
               <span className="text-pink-500 text-sm">{onlineCount} 台</span>
             </div>
             <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> 最新の自動スキャン:</span>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> 最終スキャン:</span>
               <span>{lastScan ? lastScan.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "取得中..."}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs font-bold text-slate-400">
-              <span className="flex items-center gap-1"><Scan className="w-3 h-3"/> 次のスキャンまで:</span>
-              <span className="text-pink-400 bg-pink-50 px-2 py-0.5 rounded-md">{countdown || "計算中..."}</span>
             </div>
           </div>
         </header>
